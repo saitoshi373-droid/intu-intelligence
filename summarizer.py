@@ -39,7 +39,8 @@ Content: {text}
         return f"（要約取得失敗: {title[:30]}）"
 
 
-def summarize_batch(articles: list) -> list:
+def summarize_batch(articles: list, max_articles: int = 30) -> list:
+    articles = articles[:max_articles]
     results = []
     for i, article in enumerate(articles):
         logger.info(f"要約中 {i+1}/{len(articles)}: {article['title'][:40]}")
@@ -50,5 +51,5 @@ def summarize_batch(articles: list) -> list:
         )
         article["summary_ja"] = summary
         results.append(article)
-        time.sleep(1.5)
+        time.sleep(0.5)
     return results
