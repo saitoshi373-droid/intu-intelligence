@@ -1,12 +1,12 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import time
 import logging
 from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 
 def summarize_article(title: str, text: str, lang: str) -> str:
@@ -31,11 +31,16 @@ Content: {text}
 要約（日本語で）:"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                http_options=types.HttpOptions(timeout=30),
+            ),
+        )
         return response.text.strip()
     except Exception as e:
         logger.warning(f"要約失敗: {e}")
-        time.sleep(2)
         return f"（要約取得失敗: {title[:30]}）"
 
 
