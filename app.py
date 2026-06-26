@@ -59,17 +59,45 @@ with st.sidebar:
     st.markdown("---")
     st.markdown('<div class="cat-header">カテゴリ</div>', unsafe_allow_html=True)
 
+    FIXED_CATS = [
+        "思考力・認知科学", "日本の教育", "海外の教育",
+        "脳科学・神経科学", "ビジネス×思考力", "EdTech・教育テクノロジー",
+        "哲学・批判的思考", "心理学・成長マインドセット",
+    ]
     try:
-        all_cats = fetch_categories()
+        db_cats = fetch_categories()
+        extra = [c for c in db_cats if c not in FIXED_CATS and c not in ("すべて", "⭐ お気に入り")]
     except Exception:
-        all_cats = ["すべて", "⭐ お気に入り"]
+        extra = []
+
+    try:
+        all_articles_for_count = fetch_articles(limit=1000)
+        count_map = {}
+        for a in all_articles_for_count:
+            c = a.get("category", "")
+            count_map[c] = count_map.get(c, 0) + 1
+        total_count = len(all_articles_for_count)
+        fav_count = sum(1 for a in all_articles_for_count if a.get("is_favorite"))
+    except Exception:
+        count_map = {}
+        total_count = 0
+        fav_count = 0
+
+    all_cats = ["すべて", "⭐ お気に入り"] + FIXED_CATS + extra
 
     if "selected_cat" not in st.session_state:
         st.session_state.selected_cat = "すべて"
 
     for cat in all_cats:
         is_selected = st.session_state.selected_cat == cat
-        label = f"**{cat}**" if is_selected else cat
+        if cat == "すべて":
+            badge = f" ({total_count})" if total_count else ""
+        elif cat == "⭐ お気に入り":
+            badge = f" ({fav_count})" if fav_count else ""
+        else:
+            n = count_map.get(cat, 0)
+            badge = f" ({n})" if n else ""
+        label = f"**{cat}{badge}**" if is_selected else f"{cat}{badge}"
         if st.button(label, key=f"cat_{cat}", use_container_width=True):
             st.session_state.selected_cat = cat
             st.rerun()
