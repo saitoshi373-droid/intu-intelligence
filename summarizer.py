@@ -66,5 +66,5 @@ def summarize_batch(articles: list, max_articles: int = 50) -> list:
         )
         article["summary_ja"] = summary
         results.append(article)
-        time.sleep(0.3)
+        time.sleep(2.0)
     return results
