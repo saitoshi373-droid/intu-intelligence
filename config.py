@@ -13,7 +13,7 @@ EMAIL_TO = os.getenv("EMAIL_TO", "saitoshi373@gmail.com")
 
 RSS_SOURCES = {
     "思考力・認知科学": [
-        ("Psychology Today", "https://www.psychologytoday.com/intl/node/feed/rss"),
+        ("MindShift KQED", "https://www.kqed.org/mindshift/feed"),
         ("Big Think", "https://bigthink.com/feed/"),
         ("Greater Good Science Center", "https://greatergood.berkeley.edu/feeds/news"),
         ("The Conversation - Psychology", "https://theconversation.com/us/topics/psychology/articles.atom"),
@@ -21,7 +21,7 @@ RSS_SOURCES = {
     "日本の教育": [
         ("文部科学省", "https://www.mext.go.jp/rss/index.xml"),
         ("NHK教育・文化", "https://www3.nhk.or.jp/rss/news/cat05.xml"),
-        ("リセマム", "https://resemom.jp/rss/index.rdf"),
+        ("教育新聞", "https://www.kyobun.co.jp/feed/"),
         ("朝日新聞教育", "https://www.asahi.com/rss/asahi/edu.rdf"),
     ],
     "海外の教育": [
@@ -32,8 +32,8 @@ RSS_SOURCES = {
     ],
     "脳科学・神経科学": [
         ("Neuroscience News", "https://neurosciencenews.com/feed/"),
-        ("Scientific American Mind", "https://rss.sciam.com/ScientificAmerican-News"),
-        ("BrainFacts", "https://www.brainfacts.org/rss/news"),
+        ("Dana Foundation", "https://dana.org/news/feed/"),
+        ("Scientific American", "https://www.scientificamerican.com/feed/"),
     ],
     "TQテスト関連": [
         ("Assessment Research", "https://www.tandfonline.com/feed/rss/rced20"),
@@ -51,7 +51,7 @@ RSS_SOURCES = {
         ("Brain Pickings / The Marginalian", "https://www.themarginalian.org/feed/"),
     ],
     "権威・専門家の発言": [
-        ("Harvard Education", "https://www.gse.harvard.edu/news/rss.xml"),
+        ("Brookings Education", "https://www.brookings.edu/topic/education/feed/"),
         ("Stanford Education", "https://ed.stanford.edu/news/rss.xml"),
         ("MIT News - Learning", "https://news.mit.edu/rss/topic/learning"),
     ],

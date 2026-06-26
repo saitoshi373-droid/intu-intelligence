@@ -1,10 +1,13 @@
 import feedparser
 import requests
+import re
 from datetime import datetime, timezone
 from typing import List, Dict
 import time
 import logging
-from config import RSS_SOURCES
+from config import RSS_SOURCES, KEYWORDS_FILTER
+
+BROAD_SOURCES = {"Big Think", "The Marginalian", "Brain Pickings / The Marginalian", "Aeon - Education"}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -29,11 +32,16 @@ def fetch_feed(source_name: str, url: str, category: str) -> List[Dict]:
             elif hasattr(entry, "description"):
                 summary_raw = entry.description[:500]
 
-            import re
             summary_raw = re.sub(r"<[^>]+>", "", summary_raw).strip()
 
+            title = entry.get("title", "")
+            if source_name in BROAD_SOURCES:
+                combined = (title + " " + summary_raw).lower()
+                if not any(kw.lower() in combined for kw in KEYWORDS_FILTER):
+                    continue
+
             articles.append({
-                "title": entry.get("title", ""),
+                "title": title,
                 "url": entry.get("link", ""),
                 "source": source_name,
                 "category": category,
