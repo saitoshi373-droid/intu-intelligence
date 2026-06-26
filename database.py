@@ -27,6 +27,11 @@ def upsert_articles(articles: List[Dict]) -> int:
                 .execute()
             )
             if existing.data:
+                existing_id = existing.data[0]["id"]
+                if article.get("summary_ja"):
+                    client.table("articles").update({
+                        "summary_ja": article["summary_ja"],
+                    }).eq("id", existing_id).execute()
                 continue
 
             client.table("articles").insert({
