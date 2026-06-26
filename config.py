@@ -20,7 +20,8 @@ RSS_SOURCES = {
     "日本の教育": [
         ("文部科学省", "https://www.mext.go.jp/rss/index.xml"),
         ("NHK教育・文化", "https://www3.nhk.or.jp/rss/news/cat05.xml"),
-        ("東洋経済education×ICT", "https://toyokeizai.net/list/feed/rss?category_name=education"),
+        ("リセマム", "https://resemom.jp/rss/index.rdf"),
+        ("朝日新聞教育", "https://www.asahi.com/rss/asahi/edu.rdf"),
     ],
     "海外の教育": [
         ("Education Week", "https://www.edweek.org/feed"),
