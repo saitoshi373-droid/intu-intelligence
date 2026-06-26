@@ -15,6 +15,8 @@ HEADERS = {
 def summarize_article(title: str, text: str, lang: str) -> str:
     if not title:
         return "（タイトルなし）"
+    if not text or len(text.strip()) < 30:
+        return f"（本文未取得 — タイトル: {title[:40]}）"
 
     if lang == "ja":
         prompt = f"""以下の記事を3〜4文で要約してください。
