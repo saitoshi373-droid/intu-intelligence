@@ -1,50 +1,60 @@
-from google import genai
-from google.genai import types
+import requests
 import time
 import logging
-from config import GEMINI_API_KEY
+from config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+HEADERS = {
+    "Authorization": f"Bearer {GROQ_API_KEY}",
+    "Content-Type": "application/json",
+}
 
 
 def summarize_article(title: str, text: str, lang: str) -> str:
-    if not text and not title:
-        return "（本文なし）"
+    if not title:
+        return "（タイトルなし）"
 
     if lang == "ja":
         prompt = f"""以下の記事を3〜4文で要約してください。
-思考力・教育・認知科学に関するポイントを中心に、齊藤（思考研究家）が読んで参考になる内容を抽出してください。
+思考力・教育・認知科学に関するポイントを中心に抽出してください。
 
 タイトル: {title}
-本文: {text}
+本文: {text[:800] if text else "（本文なし）"}
 
 要約（日本語で）:"""
     else:
-        prompt = f"""以下の英語記事を日本語で3〜4文に要約してください。
-思考力・教育・認知科学に関するポイントを中心に、齊藤（思考研究家）が読んで参考になる内容を抽出してください。
+        prompt = f"""以下の英語記事のタイトルと内容を日本語に翻訳・要約してください。
+タイトルの日本語訳と、3〜4文の内容要約を出力してください。
+
+形式：
+【タイトル訳】〇〇〇
+【要約】〇〇〇
 
 Title: {title}
-Content: {text}
-
-要約（日本語で）:"""
+Content: {text[:800] if text else "(no content)"}"""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                http_options=types.HttpOptions(timeout=30),
-            ),
+        res = requests.post(
+            GROQ_URL,
+            headers=HEADERS,
+            json={
+                "model": "llama3-8b-8192",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.3,
+            },
+            timeout=15,
         )
-        return response.text.strip()
+        res.raise_for_status()
+        return res.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.warning(f"要約失敗: {e}")
-        return f"（要約取得失敗: {title[:30]}）"
+        return f"（要約失敗: {title[:30]}）"
 
 
-def summarize_batch(articles: list, max_articles: int = 30) -> list:
+def summarize_batch(articles: list, max_articles: int = 50) -> list:
     articles = articles[:max_articles]
     results = []
     for i, article in enumerate(articles):
@@ -56,5 +66,5 @@ def summarize_batch(articles: list, max_articles: int = 30) -> list:
         )
         article["summary_ja"] = summary
         results.append(article)
-        time.sleep(0.5)
+        time.sleep(0.3)
     return results
