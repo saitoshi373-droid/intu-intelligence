@@ -37,6 +37,7 @@ def upsert_articles(articles: List[Dict]) -> int:
                 "published_date": article.get("published_date"),
                 "summary_ja": article.get("summary_ja", ""),
                 "original_lang": article.get("original_lang", "en"),
+                "is_favorite": False,
             }).execute()
             saved += 1
         except Exception as e:
@@ -45,15 +46,24 @@ def upsert_articles(articles: List[Dict]) -> int:
     return saved
 
 
-def fetch_articles(category: str = None, keyword: str = None, limit: int = 100) -> List[Dict]:
+def fetch_articles(category: str = None, keyword: str = None, limit: int = 100, favorites_only: bool = False) -> List[Dict]:
     client = get_client()
     query = client.table("articles").select("*").order("published_date", desc=True).limit(limit)
     if category and category != "すべて":
         query = query.eq("category", category)
     if keyword:
         query = query.ilike("title", f"%{keyword}%")
+    if favorites_only:
+        query = query.eq("is_favorite", True)
     result = query.execute()
     return result.data or []
+
+
+def toggle_favorite(article_id: int, current: bool) -> bool:
+    client = get_client()
+    new_val = not current
+    client.table("articles").update({"is_favorite": new_val}).eq("id", article_id).execute()
+    return new_val
 
 
 def fetch_new_articles_this_week() -> List[Dict]:
@@ -74,4 +84,4 @@ def fetch_categories() -> List[str]:
     client = get_client()
     result = client.table("articles").select("category").execute()
     categories = sorted(set(row["category"] for row in result.data or []))
-    return ["すべて"] + categories
+    return ["すべて", "⭐ お気に入り"] + categories
