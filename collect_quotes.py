@@ -53,6 +53,34 @@ def fetch_quotes(person: str) -> list:
         return []
 
 
+def translate_quote(quote: str) -> str:
+    import requests as req
+    headers = {
+        "Authorization": f"Bearer {__import__('config').GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    try:
+        res = req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": f"以下の英語の名言を自然な日本語に翻訳してください。訳文だけ出力してください。\n\n{quote}"}],
+                "max_tokens": 200,
+                "temperature": 0.3,
+            },
+            timeout=15,
+        )
+        if res.status_code == 429:
+            time.sleep(15)
+            return translate_quote(quote)
+        res.raise_for_status()
+        return res.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        logger.warning(f"翻訳失敗: {e}")
+        return "（翻訳失敗）"
+
+
 def is_relevant_quote(quote: str) -> bool:
     """思考力・学習・知性・教育に関係する名言かどうかをキーワードで判定"""
     keywords = [
@@ -74,18 +102,14 @@ def main():
         filtered = [q for q in quotes if is_relevant_quote(q)]
         logger.info(f"  → {len(quotes)}件取得 → フィルター後{len(filtered)}件")
         for quote in filtered:
-            summary = summarize_article(
-                title=f"{person}: {quote[:50]}",
-                text=quote,
-                lang="en",
-            )
+            ja = translate_quote(quote)
             all_articles.append({
-                "title": f"【{person}】{quote[:60]}",
+                "title": f"【{person}】{quote[:80]}",
                 "url": f"https://en.wikiquote.org/wiki/{person.replace(' ', '_')}",
                 "source": "Wikiquote",
                 "category": "偉人・著名人の名言",
                 "published_date": None,
-                "summary_ja": summary,
+                "summary_ja": f"【原文】{quote}\n【日本語訳】{ja}",
                 "original_lang": "en",
             })
             time.sleep(3.0)
