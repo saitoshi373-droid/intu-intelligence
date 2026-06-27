@@ -1,121 +1,128 @@
 """
-偉人の名言をWikiquoteから収集してDBに保存する（一回限りの大量取得）
+思考力・学習・教育に関する偉人の名言をGroqで収集してDBに保存
 """
 import requests
 import time
 import logging
+from config import GROQ_API_KEY
 from database import upsert_articles
-from summarizer import summarize_article
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-THINKERS = [
-    "Socrates", "Aristotle", "Plato", "Confucius",
-    "John Dewey", "Jean Piaget", "Lev Vygotsky",
-    "Albert Einstein", "Richard Feynman", "Carl Sagan",
-    "Benjamin Franklin", "Abraham Lincoln", "Winston Churchill",
-    "Nelson Mandela", "Mahatma Gandhi", "Martin Luther King Jr.",
-    "Steve Jobs", "Peter Drucker", "Warren Buffett",
-    "Friedrich Nietzsche", "Immanuel Kant", "René Descartes",
-    "Blaise Pascal", "Leonardo da Vinci", "Isaac Newton",
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+HEADERS = {
+    "Authorization": f"Bearer {GROQ_API_KEY}",
+    "Content-Type": "application/json",
+}
+
+THEMES = [
+    "思考力・批判的思考の重要性",
+    "学ぶことの本質・教育の目的",
+    "知識と知恵の違い",
+    "創造性・想像力の重要性",
+    "問いを持つことの価値",
+    "失敗と成長・試行錯誤",
+    "自分の頭で考えることの重要性",
+    "好奇心・探求心の価値",
 ]
 
-WIKIQUOTE_API = "https://en.wikiquote.org/w/api.php"
 
+def fetch_quotes_for_theme(theme: str) -> list:
+    prompt = f"""テーマ「{theme}」に関する偉人・著名人の名言を5つ教えてください。
 
-def fetch_quotes(person: str) -> list:
-    params = {
-        "action": "parse",
-        "page": person,
-        "prop": "wikitext",
-        "format": "json",
-    }
+以下の形式で出力してください（5件、番号付き）：
+
+1.
+人物名：（日本語表記）
+肩書き：（例：物理学者、哲学者、教育者など）
+原文：（英語または日本語の原文）
+日本語訳：（日本語訳、原文が日本語なら同じ）
+思考力との関連：（なぜ思考力・教育に重要な言葉か1文で）
+
+2.
+...
+
+有名で信頼性の高い名言のみ選んでください。"""
+
     try:
-        res = requests.get(WIKIQUOTE_API, params=params, timeout=10,
-                          headers={"User-Agent": "intu-intelligence/1.0 (saitoshi373@gmail.com)"})
+        res = requests.post(
+            GROQ_URL,
+            headers=HEADERS,
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1500,
+                "temperature": 0.3,
+            },
+            timeout=30,
+        )
+        if res.status_code == 429:
+            logger.warning("429 Rate limit、20秒待機...")
+            time.sleep(20)
+            return fetch_quotes_for_theme(theme)
         res.raise_for_status()
-        wikitext = res.json().get("parse", {}).get("wikitext", {}).get("*", "")
-
-        import re
-        lines = wikitext.split("\n")
-        quotes = []
-        for line in lines:
-            line = line.strip()
-            if line.startswith("*") and len(line) > 20:
-                clean = re.sub(r"\[\[.*?\]\]|\{\{.*?\}\}|<.*?>|''+", "", line)
-                clean = clean.lstrip("* ").strip()
-                if len(clean) > 20 and len(clean) < 500:
-                    quotes.append(clean)
-        return quotes[:20]
+        return parse_quotes(res.json()["choices"][0]["message"]["content"], theme)
     except Exception as e:
-        logger.warning(f"{person} 取得失敗: {e}")
+        logger.warning(f"取得失敗 ({theme}): {e}")
         return []
 
 
-def translate_quote(quote: str) -> str:
-    import requests as req
-    headers = {
-        "Authorization": f"Bearer {__import__('config').GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    try:
-        res = req.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": f"以下の英語の名言を自然な日本語に翻訳してください。訳文だけ出力してください。\n\n{quote}"}],
-                "max_tokens": 200,
-                "temperature": 0.3,
-            },
-            timeout=15,
-        )
-        if res.status_code == 429:
-            time.sleep(15)
-            return translate_quote(quote)
-        res.raise_for_status()
-        return res.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.warning(f"翻訳失敗: {e}")
-        return "（翻訳失敗）"
+def parse_quotes(text: str, theme: str) -> list:
+    articles = []
+    blocks = []
+    current = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if line and line[0].isdigit() and line[1:3] in (".\n", ". ", "）", ")"):
+            if current:
+                blocks.append("\n".join(current))
+            current = [line]
+        elif line:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+
+    for block in blocks:
+        person = _extract(block, ["人物名：", "人物："])
+        title = _extract(block, ["肩書き：", "肩書："])
+        original = _extract(block, ["原文："])
+        translation = _extract(block, ["日本語訳："])
+        relevance = _extract(block, ["思考力との関連：", "関連："])
+
+        if not person or not original:
+            continue
+
+        articles.append({
+            "title": f"【{person}】{original[:80]}",
+            "url": f"https://en.wikiquote.org/wiki/{person.replace(' ', '_').replace('　', '_')}#{hash(original) % 99999}",
+            "source": f"Wikiquote（{person}）",
+            "category": "偉人・著名人の名言",
+            "published_date": None,
+            "summary_ja": f"👤 {person}（{title}）\n\n📜 原文：{original}\n\n🇯🇵 日本語訳：{translation}\n\n💡 思考力との関連：{relevance}",
+            "original_lang": "ja",
+        })
+    return articles
 
 
-def is_relevant_quote(quote: str) -> bool:
-    """思考力・学習・知性・教育に関係する名言かどうかをキーワードで判定"""
-    keywords = [
-        "think", "thought", "mind", "knowledge", "learn", "education",
-        "wisdom", "intelligence", "reason", "understand", "question",
-        "curious", "idea", "truth", "logic", "reflect", "study",
-        "teach", "discover", "know", "believe", "imagine", "creative",
-        "考", "思", "知", "学", "智", "理", "問",
-    ]
-    lower = quote.lower()
-    return any(kw in lower for kw in keywords)
+def _extract(text: str, keys: list) -> str:
+    for key in keys:
+        for line in text.split("\n"):
+            if key in line:
+                return line.split(key, 1)[-1].strip()
+    return ""
 
 
 def main():
     all_articles = []
-    for person in THINKERS:
-        logger.info(f"取得中: {person}")
-        quotes = fetch_quotes(person)
-        filtered = [q for q in quotes if is_relevant_quote(q)]
-        logger.info(f"  → {len(quotes)}件取得 → フィルター後{len(filtered)}件")
-        for quote in filtered:
-            ja = translate_quote(quote)
-            all_articles.append({
-                "title": f"【{person}】{quote[:80]}",
-                "url": f"https://en.wikiquote.org/wiki/{person.replace(' ', '_')}",
-                "source": "Wikiquote",
-                "category": "偉人・著名人の名言",
-                "published_date": None,
-                "summary_ja": f"【原文】{quote}\n【日本語訳】{ja}",
-                "original_lang": "en",
-            })
-            time.sleep(3.0)
-        time.sleep(2.0)
+    for theme in THEMES:
+        logger.info(f"テーマ取得中: {theme}")
+        quotes = fetch_quotes_for_theme(theme)
+        logger.info(f"  → {len(quotes)}件")
+        all_articles.extend(quotes)
+        time.sleep(5.0)
 
-    logger.info(f"合計 {len(all_articles)} 件の名言を保存中...")
+    logger.info(f"合計 {len(all_articles)} 件を保存中...")
     saved = upsert_articles(all_articles)
     logger.info(f"✅ 保存完了: {saved}件")
 
