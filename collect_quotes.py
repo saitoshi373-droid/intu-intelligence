@@ -32,7 +32,8 @@ def fetch_quotes(person: str) -> list:
         "format": "json",
     }
     try:
-        res = requests.get(WIKIQUOTE_API, params=params, timeout=10)
+        res = requests.get(WIKIQUOTE_API, params=params, timeout=10,
+                          headers={"User-Agent": "intu-intelligence/1.0 (saitoshi373@gmail.com)"})
         res.raise_for_status()
         wikitext = res.json().get("parse", {}).get("wikitext", {}).get("*", "")
 
