@@ -4,6 +4,7 @@
 import requests
 import time
 import logging
+import json
 from config import GROQ_API_KEY
 from database import upsert_articles
 
@@ -17,109 +18,102 @@ HEADERS = {
 }
 
 THEMES = [
-    "思考力・批判的思考の重要性",
-    "学ぶことの本質・教育の目的",
-    "知識と知恵の違い",
-    "創造性・想像力の重要性",
-    "問いを持つことの価値",
-    "失敗と成長・試行錯誤",
-    "自分の頭で考えることの重要性",
-    "好奇心・探求心の価値",
+    ("critical thinking", "批判的思考・自分の頭で考える"),
+    ("curiosity and questioning", "好奇心・問いを持つ"),
+    ("learning and education", "学ぶことの本質・教育の目的"),
+    ("knowledge vs wisdom", "知識と知恵の違い"),
+    ("imagination and creativity", "創造性・想像力"),
+    ("failure and growth", "失敗と成長・試行錯誤"),
+    ("reading and thinking", "読書・思索の価値"),
+    ("self-improvement and reflection", "自己成長・内省"),
 ]
 
 
-def fetch_quotes_for_theme(theme: str) -> list:
-    prompt = f"""テーマ「{theme}」に関する偉人・著名人の名言を5つ教えてください。
+def fetch_quotes_for_theme(theme_en: str, theme_ja: str) -> list:
+    prompt = f"""List 5 famous quotes about "{theme_en}" from well-known historical figures, philosophers, scientists, or educators.
 
-以下の形式で出力してください（5件、番号付き）：
+Output in this exact JSON format:
+[
+  {{
+    "person": "Name in English",
+    "person_ja": "Name in Japanese",
+    "title": "their role (e.g. physicist, philosopher)",
+    "title_ja": "their role in Japanese",
+    "quote": "the exact famous quote in English",
+    "quote_ja": "Japanese translation of the quote",
+    "relevance_ja": "why this relates to thinking ability in one sentence in Japanese"
+  }}
+]
 
-1.
-人物名：（日本語表記）
-肩書き：（例：物理学者、哲学者、教育者など）
-原文：（英語または日本語の原文）
-日本語訳：（日本語訳、原文が日本語なら同じ）
-思考力との関連：（なぜ思考力・教育に重要な言葉か1文で）
+Only include verified, famous quotes. Output JSON only, no other text."""
 
-2.
-...
-
-有名で信頼性の高い名言のみ選んでください。"""
-
-    try:
-        res = requests.post(
-            GROQ_URL,
-            headers=HEADERS,
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 1500,
-                "temperature": 0.3,
-            },
-            timeout=30,
-        )
-        if res.status_code == 429:
-            logger.warning("429 Rate limit、20秒待機...")
-            time.sleep(20)
-            return fetch_quotes_for_theme(theme)
-        res.raise_for_status()
-        return parse_quotes(res.json()["choices"][0]["message"]["content"], theme)
-    except Exception as e:
-        logger.warning(f"取得失敗 ({theme}): {e}")
-        return []
-
-
-def parse_quotes(text: str, theme: str) -> list:
-    articles = []
-    blocks = []
-    current = []
-    for line in text.split("\n"):
-        line = line.strip()
-        if line and line[0].isdigit() and line[1:3] in (".\n", ". ", "）", ")"):
-            if current:
-                blocks.append("\n".join(current))
-            current = [line]
-        elif line:
-            current.append(line)
-    if current:
-        blocks.append("\n".join(current))
-
-    for block in blocks:
-        person = _extract(block, ["人物名：", "人物："])
-        title = _extract(block, ["肩書き：", "肩書："])
-        original = _extract(block, ["原文："])
-        translation = _extract(block, ["日本語訳："])
-        relevance = _extract(block, ["思考力との関連：", "関連："])
-
-        if not person or not original:
-            continue
-
-        articles.append({
-            "title": f"【{person}】{original[:80]}",
-            "url": f"https://en.wikiquote.org/wiki/{person.replace(' ', '_').replace('　', '_')}#{hash(original) % 99999}",
-            "source": f"Wikiquote（{person}）",
-            "category": "偉人・著名人の名言",
-            "published_date": None,
-            "summary_ja": f"👤 {person}（{title}）\n\n📜 原文：{original}\n\n🇯🇵 日本語訳：{translation}\n\n💡 思考力との関連：{relevance}",
-            "original_lang": "ja",
-        })
-    return articles
-
-
-def _extract(text: str, keys: list) -> str:
-    for key in keys:
-        for line in text.split("\n"):
-            if key in line:
-                return line.split(key, 1)[-1].strip()
-    return ""
+    for attempt in range(3):
+        try:
+            res = requests.post(
+                GROQ_URL,
+                headers=HEADERS,
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 1200,
+                    "temperature": 0.2,
+                },
+                timeout=30,
+            )
+            if res.status_code == 429:
+                logger.warning("429 Rate limit、20秒待機...")
+                time.sleep(20)
+                continue
+            res.raise_for_status()
+            content = res.json()["choices"][0]["message"]["content"].strip()
+            start = content.find("[")
+            end = content.rfind("]") + 1
+            if start == -1 or end == 0:
+                logger.warning("JSON見つからず")
+                return []
+            data = json.loads(content[start:end])
+            results = []
+            seen = set()
+            for item in data:
+                quote = item.get("quote", "").strip()
+                if not quote or quote in seen:
+                    continue
+                seen.add(quote)
+                person = item.get("person_ja") or item.get("person", "")
+                title_ja = item.get("title_ja") or item.get("title", "")
+                quote_ja = item.get("quote_ja", "")
+                relevance = item.get("relevance_ja", "")
+                results.append({
+                    "title": f"【{person}】{quote[:80]}",
+                    "url": f"https://wikiquote.org/wiki/{item.get('person','').replace(' ','_')}#{abs(hash(quote)) % 99999}",
+                    "source": f"{person}（{title_ja}）",
+                    "category": "偉人・著名人の名言",
+                    "published_date": None,
+                    "summary_ja": f"👤 {person}（{title_ja}）\n\n📜 原文：{quote}\n\n🇯🇵 日本語訳：{quote_ja}\n\n💡 思考力との関連：{relevance}\n\n🏷️ テーマ：{theme_ja}",
+                    "original_lang": "ja",
+                })
+            return results
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSONパース失敗: {e}")
+            time.sleep(5)
+        except Exception as e:
+            logger.warning(f"取得失敗: {e}")
+            time.sleep(5)
+    return []
 
 
 def main():
     all_articles = []
-    for theme in THEMES:
-        logger.info(f"テーマ取得中: {theme}")
-        quotes = fetch_quotes_for_theme(theme)
-        logger.info(f"  → {len(quotes)}件")
-        all_articles.extend(quotes)
+    seen_quotes = set()
+
+    for theme_en, theme_ja in THEMES:
+        logger.info(f"テーマ取得中: {theme_ja}")
+        quotes = fetch_quotes_for_theme(theme_en, theme_ja)
+        new = [q for q in quotes if q["title"] not in seen_quotes]
+        for q in new:
+            seen_quotes.add(q["title"])
+        logger.info(f"  → {len(new)}件（重複除去後）")
+        all_articles.extend(new)
         time.sleep(5.0)
 
     logger.info(f"合計 {len(all_articles)} 件を保存中...")
