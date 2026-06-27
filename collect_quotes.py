@@ -53,13 +53,27 @@ def fetch_quotes(person: str) -> list:
         return []
 
 
+def is_relevant_quote(quote: str) -> bool:
+    """思考力・学習・知性・教育に関係する名言かどうかをキーワードで判定"""
+    keywords = [
+        "think", "thought", "mind", "knowledge", "learn", "education",
+        "wisdom", "intelligence", "reason", "understand", "question",
+        "curious", "idea", "truth", "logic", "reflect", "study",
+        "teach", "discover", "know", "believe", "imagine", "creative",
+        "考", "思", "知", "学", "智", "理", "問",
+    ]
+    lower = quote.lower()
+    return any(kw in lower for kw in keywords)
+
+
 def main():
     all_articles = []
     for person in THINKERS:
         logger.info(f"取得中: {person}")
         quotes = fetch_quotes(person)
-        logger.info(f"  → {len(quotes)}件")
-        for quote in quotes:
+        filtered = [q for q in quotes if is_relevant_quote(q)]
+        logger.info(f"  → {len(quotes)}件取得 → フィルター後{len(filtered)}件")
+        for quote in filtered:
             summary = summarize_article(
                 title=f"{person}: {quote[:50]}",
                 text=quote,
