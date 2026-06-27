@@ -74,8 +74,8 @@ def main():
                 "summary_ja": summary,
                 "original_lang": "en",
             })
-            time.sleep(0.5)
-        time.sleep(1.0)
+            time.sleep(3.0)
+        time.sleep(2.0)
 
     logger.info(f"合計 {len(all_articles)} 件の名言を保存中...")
     saved = upsert_articles(all_articles)

@@ -37,23 +37,30 @@ def summarize_article(title: str, text: str, lang: str) -> str:
 Title: {title}
 Content: {text[:800] if text else "(no content)"}"""
 
-    try:
-        res = requests.post(
-            GROQ_URL,
-            headers=HEADERS,
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 300,
-                "temperature": 0.3,
-            },
-            timeout=15,
-        )
-        res.raise_for_status()
-        return res.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.warning(f"要約失敗: {e}")
-        return f"（要約失敗: {title[:30]}）"
+    for attempt in range(3):
+        try:
+            res = requests.post(
+                GROQ_URL,
+                headers=HEADERS,
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 300,
+                    "temperature": 0.3,
+                },
+                timeout=15,
+            )
+            if res.status_code == 429:
+                wait = 10 * (attempt + 1)
+                logger.warning(f"429 Rate limit、{wait}秒待機...")
+                time.sleep(wait)
+                continue
+            res.raise_for_status()
+            return res.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            logger.warning(f"要約失敗 (attempt {attempt+1}): {e}")
+            time.sleep(5)
+    return f"（要約失敗: {title[:30]}）"
 
 
 def summarize_batch(articles: list, max_articles: int = 50) -> list:
