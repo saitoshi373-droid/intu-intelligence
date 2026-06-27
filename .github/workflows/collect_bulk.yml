@@ -1,0 +1,42 @@
+name: 一括収集（名言・論文）
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '収集対象'
+        required: true
+        default: 'quotes'
+        type: choice
+        options:
+          - quotes
+          - papers
+          - both
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: 名言収集
+        if: ${{ inputs.target == 'quotes' || inputs.target == 'both' }}
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python collect_quotes.py
+
+      - name: 論文収集
+        if: ${{ inputs.target == 'papers' || inputs.target == 'both' }}
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python collect_papers.py
